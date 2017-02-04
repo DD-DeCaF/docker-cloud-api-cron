@@ -21,7 +21,14 @@ Every hour, check the environment for variables beginning with DC_CRON and
 install them to the crontab. The variables should contain a string with the
 following format:
 
-    * * * * * <service|stack> <name|uuid>
+    * * * * * * <service|stack> <name|uuid>
+    | | | | | |
+    | | | | | +-- Year              (range: 1900-3000)
+    | | | | +---- Day of the Week   (range: 1-7, 1 standing for Monday)
+    | | | +------ Month of the Year (range: 1-12)
+    | | +-------- Day of the Month  (range: 1-31)
+    | +---------- Hour              (range: 0-23)
+    +------------ Minute            (range: 0-59)
 
 So a normal cron schedule followed by the docker cloud object type and its name
 or uuid.
@@ -47,9 +54,9 @@ def main():
             for cron in (var for var in os.environ if var.startswith("DC_CRON")):
                 entries = os.environ[cron].split()
                 line = "{schedule} /opt/dc_api_cron/manage.py {object} {id}\n".format(
-                    schedule=" ".join(entries[:5]),
-                    object=entries[5],
-                    id=entries[6]
+                    schedule=" ".join(entries[:6]),
+                    object=entries[6],
+                    id=entries[7]
                 )
                 LOGGER.info(line.strip())
                 file_h.write(line)
