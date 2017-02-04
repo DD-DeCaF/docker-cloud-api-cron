@@ -53,7 +53,7 @@ def main(wait_time=3600):
         with io.open("/tmp/crontab.tmp", "w") as file_h:
             for cron in (var for var in os.environ if var.startswith("DC_CRON")):
                 entries = os.environ[cron].split()
-                line = "{schedule} /opt/dc_api_cron/manage.py {object} {id}\n".format(
+                line = u"{schedule} /opt/dc_api_cron/manage.py {object} {id}\n".format(
                     schedule=" ".join(entries[:5]),
                     object=entries[5],
                     id=entries[6]
