@@ -47,7 +47,7 @@ from subprocess import check_output
 LOGGER = logging.getLogger(__name__)
 
 
-def main():
+def main(wait_time=3600):
     while True:
         LOGGER.info("installing new crontab")
         with io.open("/tmp/crontab.tmp", "w") as file_h:
@@ -61,7 +61,7 @@ def main():
                 LOGGER.info(line.strip())
                 file_h.write(line)
             check_output(["crontab", "/tmp/crontab.tmp"])
-        sleep(3600)
+        sleep(wait_time)
 
 if __name__ == "__main__":
     root = logging.getLogger()
@@ -72,7 +72,7 @@ if __name__ == "__main__":
         format="[%(asctime)s %(levelname)s] %(message)s"
     )
     try:
-        main(sys.argv[1:])
+        main()
         rc = 0
     except StandardError as err:
         LOGGER.critical(str(err))
