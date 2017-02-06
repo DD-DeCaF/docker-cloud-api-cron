@@ -17,14 +17,16 @@
 # limitations under the License.
 
 """
-Expect input in the following format:
-
-./manage.py <stack|service> <name|uuid>
+Start an endpoint via the docker cloud API.
 
 Expects the following environment variables to be set:
 
     DOCKERCLOUD_USER
     DOCKERCLOUD_APIKEY
+
+or:
+
+    DOCKERCLOUD_AUTH
 
 and possibly:
 
@@ -33,71 +35,75 @@ and possibly:
 
 from __future__ import (absolute_import, print_function)
 
-import sys
 import os
 import logging
 
 from time import sleep
 from math import ceil
 
+import click
 import dockercloud as dc
 
-LOGGER = logging.getLogger(__name__)
-DOCKERCLOUD_OBJECTS = {
+DOCKERCLOUD_TYPES = {
     "stack": dc.Stack,
     "service": dc.Service
 }
 
 
-def start(unit, grace_time=10.0, delay=0.5):
-    LOGGER.info("object %r: %r" % (unit.name, unit.uuid))
-    if unit.state != "Stopped":
-        LOGGER.info("stopping %r: %r" % (unit.name, unit.uuid))
-        unit.stop()
+def find_endpoint(dc_type, dc_id):
+    """Find a docker cloud endpoint by its name or UUID."""
+    units = dc_type.list(name=dc_id)  # make threaded?
+    units += dc_type.list(uuid=dc_id)
+    assert len(units) == 1, "%d objects found, expected 1" % (len(units),)
+    return units[0]
+
+
+def start(endpoint, grace_time=10.0, delay=0.5):
+    """Start a docker cloud object, stopping it first if necessary."""
+    LOGGER.info("object %r: %r", endpoint.name, endpoint.uuid)
+    if endpoint.state != "Stopped":
+        LOGGER.info("stopping %r: %r", endpoint.name, endpoint.uuid)
+        endpoint.stop()
         for _ in range(ceil(grace_time / delay)):
             sleep(delay)
-            unit.refresh()
-            if unit.state == "Stopped":
+            endpoint.refresh()
+            if endpoint.state == "Stopped":
                 break
             LOGGER.info("waiting...")
-    unit.start()
+    endpoint.start()
 
-def main(argv):
-    LOGGER.debug("start main with %r" % (argv,))
-    assert ("DOCKERCLOUD_USER" in os.environ), "DOCKERCLOUD_USER must be defined"
-    assert ("DOCKERCLOUD_APIKEY" in os.environ), "DOCKERCLOUD_APIKEY must be defined"
-    dc_object = DOCKERCLOUD_OBJECTS.get(argv[0].lower())
-    if dc_object is None:
-        raise ValueError("unknown docker cloud API object %r" % (argv[0],))
-    # find service/stack by name/uuid
-    units = dc_object.list(name=argv[1]) # make threaded?
-    units += dc_object.list(uuid=argv[1])
-    assert len(units) == 1, "%d objects found, expected 1" % (len(units),)
+
+@click.command(context_settings=dict(help_option_names=['-h', '--help']))
+@click.argument("dc_type", type=click.Choice(["stack", "service"]))
+@click.argument("dc_id")
+@click.option("--log-level", "-l", default="WARN",
+              type=click.Choice(["DEBUG", "INFO", "WARN", "ERROR", "CRITICAL"]),
+              help="set the logging level")
+def manage(dc_type, dc_id, log_level):
+    """
+    Start the docker cloud endpoint DC_ID of DC_TYPE via the API.
+
+    Currently the endpoint DC_TYPE can be either 'stack' or 'service'.
+    DC_ID is either the name or the uuid of the endpoint.
+    """
+    assert ("DOCKERCLOUD_AUTH" in os.environ) or (
+                ("DOCKERCLOUD_USER" in os.environ) and
+                ("DOCKERCLOUD_APIKEY" in os.environ)
+            ), "docker cloud authorization must be defined via environment"
+    LOGGER.setLevel(log_level)
+    dc_type = DOCKERCLOUD_TYPES[dc_type]
+    endpoint = find_endpoint(dc_type, dc_id)
     try:
-        start(units[0])
+        start(endpoint)
     except dc.ApiError as err:
         LOGGER.error(str(err))
 
 
 if __name__ == "__main__":
-    root = logging.getLogger()
-    for handler in root.handlers:
-        root.removeHandler(handler)
     logging.basicConfig(
-        level="WARN",
+        level=logging.WARN,
         format="[%(asctime)s %(levelname)s] %(message)s"
     )
-    try:
-        if len(sys.argv) != 3:
-            print("Usage:\n%s <stack|service> <name|uuid>" % (sys.argv[0],))
-            rc = 2
-        else:
-            main(sys.argv[1:])
-            rc = 0
-    except StandardError as err:
-        LOGGER.critical(str(err))
-        rc = 1
-    finally:
-        logging.shutdown()
-        sys.exit(rc)
-
+    LOGGER = logging.getLogger()
+    manage()
+    logging.shutdown()
