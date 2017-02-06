@@ -1,24 +1,28 @@
 # Docker Cloud API Cron
 
-Implements a docker cloud stack that:
+Generate cron jobs from environment variables suitable for docker cloud.
 
-Every hour, checks the environment for variables beginning with `DC_CRON` and
-installs them to the crontab. The variables should contain a string with the
-following format:
+The environment variables should have the following format in order to be
+correctly installed as cron jobs:
 
-```
-* * * * * <service|stack> <name|uuid>
-| | | | |
-| | | | |
-| | | | +---- Day of the Week   (range: 1-7, 1 standing for Monday)
-| | | +------ Month of the Year (range: 1-12)
-| | +-------- Day of the Month  (range: 1-31)
-| +---------- Hour              (range: 0-23)
-+------------ Minute            (range: 0-59)
-```
+1. Their names begin with ``DC_CRON``.
+2. Their content should be a string describing a cron schedule plus a docker
+   cloud service or stack endpoint given by its name or UUID.
+3. Optionally, a log level can be defined and logs of the script that manages
+   the docker cloud API endpoint are stored in `/var/log/dc_cron*.log` inside of
+   the container.
 
-So a normal cron schedule followed by the docker cloud object type and its name
-or uuid.
+    * * * * * <service|stack> <name|uuid> [LEVEL]
+    | | | | |
+    | | | | |
+    | | | | +---- Day of the Week   (range: 1-7, 1 standing for Monday)
+    | | | +------ Month of the Year (range: 1-12)
+    | | +-------- Day of the Month  (range: 1-31)
+    | +---------- Hour              (range: 0-23)
+    +------------ Minute            (range: 0-59)
+
+**N.B.:** The container currently uses Python 2.7 because the `dockercloud`
+package does not work with 3+.
 
 ## Copyright
 

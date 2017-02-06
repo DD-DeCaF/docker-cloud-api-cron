@@ -17,13 +17,26 @@
 # limitations under the License.
 
 """
-Generate cron jobs on the docker cloud via their API.
+Generate cron jobs from environment variables suitable for docker cloud.
 
-Every hour, check the environment for variables beginning with DC_CRON and
-install them to the crontab. The variables should contain a string with the
-following format:
+This is run as a service within a phusion/baseimage docker container. It needs
+to be run after environment variables have been initialized but really only
+needs to be run once. However, a docker container needs an on-going process or
+it exits. An alternative would be a script that runs this Python script once and
+then the cron daemon in the foreground. For the time being this just sleeps for
+a very long time.
 
-    * * * * * <service|stack> <name|uuid>
+The environment variables should have the following format in order to be
+correctly installed as cron jobs:
+
+1. Their names begin with ``DC_CRON``.
+2. Their content should be a string describing a cron schedule plus a docker
+   cloud service or stack endpoint given by its name or UUID.
+3. Optionally, a log level can be defined and logs of the script that manages
+   the docker cloud API endpoint are stored in `/var/log/dc_cron*.log` inside of
+   the container.
+
+    * * * * * <service|stack> <name|uuid> [LEVEL]
     | | | | |
     | | | | |
     | | | | +---- Day of the Week   (range: 1-7, 1 standing for Monday)
@@ -31,9 +44,6 @@ following format:
     | | +-------- Day of the Month  (range: 1-31)
     | +---------- Hour              (range: 0-23)
     +------------ Minute            (range: 0-59)
-
-So a normal cron schedule followed by the docker cloud endpoint type and its
-name or uuid.
 """
 
 from __future__ import absolute_import
@@ -42,10 +52,10 @@ import os
 import io
 import logging
 
-from time import sleep
-from subprocess import (check_output, CalledProcessError)
+from subprocess import check_output
 from glob import glob
 from collections import Counter
+from time import sleep
 
 import click
 
@@ -100,37 +110,32 @@ def add_dockercloud_env(lines):
 
 
 @click.command(context_settings=dict(help_option_names=['-h', '--help']))
-@click.option("--snooze", "-s", type=float, default=20.0,
-              help="time in seconds until the environment is checked again")
 @click.option("--log-level", "-l", default="WARN",
               type=click.Choice(["DEBUG", "INFO", "WARN", "ERROR", "CRITICAL"]),
-              help="set the logging level")
-def watcher(snooze, log_level):
-    """Generate cron jobs for the docker cloud from environment variables."""
+              help="Set the logging level.")
+def main(log_level):
+    """
+    Generate cron jobs from environment variables suitable for docker cloud.
+    """
     LOGGER.setLevel(log_level)
+    LOGGER.info("installing new crontab")
+    jobs = sorted(glob("/etc/container_environment/DC_CRON*"))
+    logs = Counter()
+    lines = list()
+    # cron jobs environment variables
+    lines.append(u'MAILTO=""\n')  # disable MTA
+    add_dockercloud_env(lines)
+    for cron_job in jobs:
+        cron_line = make_cron_line(cron_job, logs)
+        LOGGER.info(cron_line.strip())
+        lines.append(cron_line)
+    with io.open("/tmp/crontab.tmp", "w") as crontab:
+        crontab.writelines(lines)
+    check_output(["crontab", "/tmp/crontab.tmp"])
     while True:
-        LOGGER.info("installing new crontab")
-        jobs = sorted(glob("/etc/container_environment/DC_CRON*"))
-        logs = Counter()
-        lines = list()
-        # cron jobs environment variables
-        lines.append(u'MAILTO=""\n')  # disable MTA
-        add_dockercloud_env(lines)
-        for cron_job in jobs:
-            cron_line = make_cron_line(cron_job, logs)
-            LOGGER.info(cron_line.strip())
-            lines.append(cron_line)
-        dirty = True
-        try:
-            old_tab = check_output(["crontab", "-l"])
-            dirty = ("".join(lines) != old_tab)
-        except CalledProcessError as err:
-            LOGGER.error(str(err))
-        if dirty:
-            with io.open("/tmp/crontab.tmp", "w") as crontab:
-                crontab.writelines(lines)
-            check_output(["crontab", "/tmp/crontab.tmp"])
-        sleep(snooze)
+        # Environment variables of a running container cannot be updated but
+        # since this runs as a service it would be restarted all the time.
+        sleep(86400)
 
 
 if __name__ == "__main__":
@@ -139,5 +144,5 @@ if __name__ == "__main__":
         format="[%(asctime)s %(levelname)s] %(message)s"
     )
     LOGGER = logging.getLogger()
-    watcher()
+    main()
     logging.shutdown()

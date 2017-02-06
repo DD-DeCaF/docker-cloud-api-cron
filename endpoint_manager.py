@@ -78,8 +78,8 @@ def start(endpoint, grace_time=10.0, delay=0.5):
 @click.argument("dc_id")
 @click.option("--log-level", "-l", default="WARN",
               type=click.Choice(["DEBUG", "INFO", "WARN", "ERROR", "CRITICAL"]),
-              help="set the logging level")
-def manage(dc_type, dc_id, log_level):
+              help="Set the logging level.")
+def main(dc_type, dc_id, log_level):
     """
     Start the docker cloud endpoint DC_ID of DC_TYPE via the API.
 
@@ -105,5 +105,5 @@ if __name__ == "__main__":
         format="[%(asctime)s %(levelname)s] %(message)s"
     )
     LOGGER = logging.getLogger()
-    manage()
+    main()
     logging.shutdown()
