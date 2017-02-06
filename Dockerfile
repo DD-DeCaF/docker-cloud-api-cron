@@ -8,8 +8,6 @@ RUN pip install -U pip setuptools wheel
 
 RUN pip install click python-dockercloud
 
-ENV DOCKERCLOUD_USER="" DOCKERCLOUD_APIKEY=""
-
 RUN mkdir -p /etc/service/dc_api_cron
 COPY env_watcher.py /etc/service/dc_api_cron/run
 RUN chmod 0755 /etc/service/dc_api_cron/run

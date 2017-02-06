@@ -38,6 +38,7 @@ name or uuid.
 
 from __future__ import absolute_import
 
+import os
 import io
 import logging
 
@@ -79,6 +80,25 @@ def make_cron_line(job, namespace):
     return line
 
 
+def add_dockercloud_env(lines):
+    if "DOCKERCLOUD_AUTH" in os.environ:
+        lines.append(u"DOCKERCLOUD_AUTH={}\n".format(
+            os.environ["DOCKERCLOUD_AUTH"]
+        ))
+    if "DOCKERCLOUD_USER" in os.environ and\
+            "DOCKERCLOUD_APIKEY" in os.environ:
+        lines.append(u"DOCKERCLOUD_USER={}\n".format(
+            os.environ["DOCKERCLOUD_USER"]
+        ))
+        lines.append(u"DOCKERCLOUD_APIKEY={}\n".format(
+            os.environ["DOCKERCLOUD_APIKEY"]
+        ))
+    if "DOCKERCLOUD_NAMESPACE" in os.environ:
+        lines.append(u"DOCKERCLOUD_NAMESPACE={}\n".format(
+            os.environ["DOCKERCLOUD_NAMESPACE"]
+        ))
+
+
 @click.command(context_settings=dict(help_option_names=['-h', '--help']))
 @click.option("--snooze", "-s", type=float, default=20.0,
               help="time in seconds until the environment is checked again")
@@ -93,7 +113,9 @@ def watcher(snooze, log_level):
         jobs = sorted(glob("/etc/container_environment/DC_CRON*"))
         logs = Counter()
         lines = list()
+        # cron jobs environment variables
         lines.append(u'MAILTO=""\n')  # disable MTA
+        add_dockercloud_env(lines)
         for cron_job in jobs:
             cron_line = make_cron_line(cron_job, logs)
             LOGGER.info(cron_line.strip())

@@ -86,11 +86,11 @@ def manage(dc_type, dc_id, log_level):
     Currently the endpoint DC_TYPE can be either 'stack' or 'service'.
     DC_ID is either the name or the uuid of the endpoint.
     """
+    LOGGER.setLevel(log_level)
     assert ("DOCKERCLOUD_AUTH" in os.environ) or (
                 ("DOCKERCLOUD_USER" in os.environ) and
                 ("DOCKERCLOUD_APIKEY" in os.environ)
             ), "docker cloud authorization must be defined via environment"
-    LOGGER.setLevel(log_level)
     dc_type = DOCKERCLOUD_TYPES[dc_type]
     endpoint = find_endpoint(dc_type, dc_id)
     try:
